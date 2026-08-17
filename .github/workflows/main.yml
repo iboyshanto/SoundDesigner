@@ -1,0 +1,46 @@
+name: Signed ZXP Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Restore persistent publisher certificate
+        shell: pwsh
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.SOUNDDESIGNER_ZXP_CERT_BASE64 }}
+        run: |
+          if (-not $env:CERTIFICATE_BASE64) { throw "SOUNDDESIGNER_ZXP_CERT_BASE64 is not configured." }
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\sounddesigner-publisher.p12", [Convert]::FromBase64String($env:CERTIFICATE_BASE64))
+
+      - name: Build and sign release
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          SOUNDDESIGNER_ZXP_CERT: ${{ runner.temp }}\sounddesigner-publisher.p12
+          SOUNDDESIGNER_ZXP_PASSWORD: ${{ secrets.SOUNDDESIGNER_ZXP_PASSWORD }}
+        run: npm run release:package
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            release/SoundDesigner-*.zxp
+            release/SoundDesigner-*.zxp.sha256
