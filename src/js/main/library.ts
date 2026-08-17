@@ -1,4 +1,5 @@
 import { fs, path } from "../lib/cep/node";
+import { csi } from "../lib/utils/bolt";
 import type { AccentName, LibraryFolder, LibraryTreeNode, ScanProgress, SoundFile } from "./types";
 
 const AUDIO_EXTENSIONS: { [extension: string]: boolean } = {
@@ -37,6 +38,8 @@ const DEMO_TRACKS: Array<{
 ];
 
 export const LIBRARY_STORAGE_KEY = "sounddesigner.library-folders.v1";
+const SHARED_STORAGE_DIRECTORY = "SoundDesigner";
+const SHARED_STORAGE_FILE = "library-folders.json";
 
 export const normalizeDialogPath = (value: string) => {
   let normalized = String(value || "").trim();
@@ -225,18 +228,94 @@ export const chooseLibraryFolder = (): string | null => {
   return null;
 };
 
-export const saveLibraryPaths = (folders: LibraryFolder[]) => {
-  const paths = folders.filter((folder) => !folder.isDemo).map((folder) => folder.path);
-  localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify(paths));
+const normalizePathList = (values: unknown): string[] => {
+  if (!Array.isArray(values)) return [];
+  const paths: string[] = [];
+  const seen: { [folderPath: string]: boolean } = {};
+  for (let index = 0; index < values.length; index += 1) {
+    if (typeof values[index] !== "string") continue;
+    const folderPath = normalizeDialogPath(values[index] as string);
+    if (!folderPath || seen[folderPath]) continue;
+    seen[folderPath] = true;
+    paths.push(folderPath);
+  }
+  return paths;
 };
 
-export const loadLibraryPaths = () => {
+export const getSharedLibraryStoragePath = () => {
+  if (!window.cep || !fs || !path || typeof csi.getSystemPath !== "function") return "";
   try {
-    const parsed = JSON.parse(localStorage.getItem(LIBRARY_STORAGE_KEY) || "[]");
-    return Array.isArray(parsed) ? parsed.filter((value) => typeof value === "string") : [];
+    const userDataPath = csi.getSystemPath("userData");
+    return userDataPath ? path.join(userDataPath, SHARED_STORAGE_DIRECTORY, SHARED_STORAGE_FILE) : "";
+  } catch (_error) {
+    return "";
+  }
+};
+
+const readLocalLibraryPaths = () => {
+  try {
+    return normalizePathList(JSON.parse(localStorage.getItem(LIBRARY_STORAGE_KEY) || "[]"));
   } catch (_error) {
     return [];
   }
+};
+
+const writeLocalLibraryPaths = (paths: string[]) => {
+  try {
+    localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify(paths));
+  } catch (_error) {
+    // The shared file remains authoritative if a host blocks local storage.
+  }
+};
+
+const readSharedLibraryPaths = (): string[] | null => {
+  const storagePath = getSharedLibraryStoragePath();
+  if (!storagePath || typeof fs.existsSync !== "function" || !fs.existsSync(storagePath)) return null;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(storagePath, "utf8"));
+    return normalizePathList(parsed && Array.isArray(parsed.paths) ? parsed.paths : parsed);
+  } catch (_error) {
+    return null;
+  }
+};
+
+const writeSharedLibraryPaths = (paths: string[]) => {
+  const storagePath = getSharedLibraryStoragePath();
+  if (!storagePath || typeof fs.writeFileSync !== "function") return false;
+  const directory = path.dirname(storagePath);
+  const temporaryPath = `${storagePath}.tmp-${Date.now()}-${Math.round(Math.random() * 100000)}`;
+  try {
+    if (!fs.existsSync(directory)) fs.mkdirSync(directory);
+    fs.writeFileSync(temporaryPath, JSON.stringify({ version: 1, paths, updatedAt: Date.now() }), "utf8");
+    try {
+      fs.renameSync(temporaryPath, storagePath);
+    } catch (_renameError) {
+      if (fs.existsSync(storagePath)) fs.unlinkSync(storagePath);
+      fs.renameSync(temporaryPath, storagePath);
+    }
+    return true;
+  } catch (_error) {
+    try { if (fs.existsSync(temporaryPath)) fs.unlinkSync(temporaryPath); } catch (_cleanupError) {}
+    return false;
+  }
+};
+
+export const saveLibraryPaths = (folders: LibraryFolder[]) => {
+  const paths = normalizePathList(folders.filter((folder) => !folder.isDemo).map((folder) => folder.path));
+  writeLocalLibraryPaths(paths);
+  writeSharedLibraryPaths(paths);
+  return paths;
+};
+
+export const loadLibraryPaths = () => {
+  const sharedPaths = readSharedLibraryPaths();
+  if (sharedPaths !== null) {
+    writeLocalLibraryPaths(sharedPaths);
+    return sharedPaths;
+  }
+  const localPaths = readLocalLibraryPaths();
+  if (localPaths.length) writeSharedLibraryPaths(localPaths);
+  return localPaths;
 };
 
 export const createDemoLibrary = () => {

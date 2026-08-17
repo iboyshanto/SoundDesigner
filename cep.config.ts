@@ -44,7 +44,8 @@ const config: CEP_Config = {
     province: "CA",
     org: "Company",
     // Development-only self-signed packages. Public releases use scripts/package-release.mjs.
-    password: process.env.SOUNDDESIGNER_DEV_ZXP_PASSWORD || "development-only",
+    // Keep this runtime-safe because shared panel modules import this configuration.
+    password: "development-only",
     tsa: [
       "http://timestamp.digicert.com/", // Windows Only
       "http://timestamp.apple.com/ts01", // MacOS Only

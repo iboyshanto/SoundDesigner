@@ -630,6 +630,9 @@ export const App = () => {
   const togglePlayRef = useRef<() => void>(() => undefined);
   const toastIdRef = useRef(0);
   const tooltipTimerRef = useRef<number | null>(null);
+  const persistedLibrarySignatureRef = useRef("");
+  const libraryRestoreInProgressRef = useRef(false);
+  const librarySyncInitializedRef = useRef(false);
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId) || tabs[0];
   const selected = sounds.find((sound) => sound.id === selectedId) || null;
@@ -654,6 +657,11 @@ export const App = () => {
     const toast = { id: toastIdRef.current, type, message };
     setToasts((current) => [...current.slice(-2), toast]);
     window.setTimeout(() => setToasts((current) => current.filter((item) => item.id !== toast.id)), 3200);
+  };
+
+  const persistLibraryFolders = (nextFolders: LibraryFolder[]) => {
+    const paths = saveLibraryPaths(nextFolders);
+    persistedLibrarySignatureRef.current = JSON.stringify(paths);
   };
 
   const refreshUpdates = async () => {
@@ -800,10 +808,32 @@ export const App = () => {
   }, []);
 
   useEffect(() => {
-    const storedPaths = loadLibraryPaths();
-    if (!window.cep || !storedPaths.length) return;
+    if (!window.cep) return;
     let cancelled = false;
     const restore = async () => {
+      if (libraryRestoreInProgressRef.current) return;
+      const storedPaths = loadLibraryPaths();
+      const signature = JSON.stringify(storedPaths);
+      if (signature === persistedLibrarySignatureRef.current) return;
+      const isCrossHostRefresh = librarySyncInitializedRef.current;
+      persistedLibrarySignatureRef.current = signature;
+      librarySyncInitializedRef.current = true;
+      libraryRestoreInProgressRef.current = true;
+
+      if (!storedPaths.length) {
+        if (isCrossHostRefresh && !cancelled) {
+          setFolders(demoLibrary.folders);
+          setSounds(demoLibrary.sounds);
+          setSelectedFolder("all");
+          setSelectedId(demoLibrary.sounds[0].id);
+          setTabs(DEFAULT_TABS);
+          setActiveTabId(DEFAULT_TABS[0].id);
+          notify("info", "Shared library cleared. Demo folders restored.");
+        }
+        libraryRestoreInProgressRef.current = false;
+        return;
+      }
+
       setIsIndexing(true);
       setIndexProgress({ files: 0, folders: 0, currentPath: "" });
       const nextFolders: LibraryFolder[] = [];
@@ -822,20 +852,32 @@ export const App = () => {
           completedFiles += result.sounds.length;
           completedFolders += countTreeNodes(result.folder.tree);
         } catch (_error) {
-          // Unavailable folders are skipped and can be re-added by the user.
+          // Unavailable folders are skipped without corrupting the shared path list.
         }
       }
       if (!cancelled && nextFolders.length) {
         setFolders(nextFolders);
         setSounds(nextSounds);
+        setSelectedFolder("all");
         setSelectedId(nextSounds[0]?.id || "");
         setTabs(createLibraryTabs());
         setActiveTabId("search-library");
+        if (isCrossHostRefresh) notify("success", `Library synced · ${nextSounds.length} sounds`);
+      } else if (!cancelled && isCrossHostRefresh) {
+        notify("warning", "Shared library paths are currently unavailable on this computer.");
       }
       if (!cancelled) setIsIndexing(false);
+      libraryRestoreInProgressRef.current = false;
     };
+    const syncWhenVisible = () => { if (!document.hidden) restore(); };
+    window.addEventListener("focus", syncWhenVisible);
+    document.addEventListener("visibilitychange", syncWhenVisible);
     restore();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", syncWhenVisible);
+      document.removeEventListener("visibilitychange", syncWhenVisible);
+    };
   }, []);
 
   useEffect(() => {
@@ -987,7 +1029,7 @@ export const App = () => {
       const nextSounds = [...sounds.filter((sound) => !sound.isDemo), ...result.sounds];
       setFolders(nextFolders);
       setSounds(nextSounds);
-      saveLibraryPaths(nextFolders);
+      persistLibraryFolders(nextFolders);
       setSelectedFolder(result.folder.id);
       setSelectedId(result.sounds[0]?.id || "");
       if (!realFolders.length) {
@@ -1032,7 +1074,7 @@ export const App = () => {
     setFolders(nextFolders);
     setSounds(nextSounds);
     setSelectedId(nextSounds[0]?.id || "");
-    saveLibraryPaths(nextFolders);
+    persistLibraryFolders(nextFolders);
     setIsIndexing(false);
     setIndexProgress({ files: completedFiles, folders: completedFolders, currentPath: "" });
     notify("success", `Library refreshed · ${nextSounds.length} sounds · ${completedFolders} folders`);
@@ -1061,7 +1103,7 @@ export const App = () => {
     const nextSounds = sounds.filter((sound) => sound.folderId !== settingsFolder.id);
     setFolders(nextFolders.length ? nextFolders : demoLibrary.folders);
     setSounds(nextFolders.length ? nextSounds : demoLibrary.sounds);
-    saveLibraryPaths(nextFolders);
+    persistLibraryFolders(nextFolders);
     setSelectedFolder("all");
     setSelectedId((nextFolders.length ? nextSounds : demoLibrary.sounds)[0]?.id || "");
     if (!nextFolders.length) {
