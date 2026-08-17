@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@esTypes/*": ["./src/js/lib/cep/es-types/*"]
+    }
+  },
+  "include": ["src/js/**/*.ts", "src/js/**/*.svelte", "src/shared/**/*.ts"],
+  "exclude": ["src/jsx/**/*", "dist", "release"]
+}

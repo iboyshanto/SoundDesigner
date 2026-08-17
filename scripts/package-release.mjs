@@ -16,7 +16,7 @@ if (!/^\d+\.\d+\.\d+$/.test(version)) {
 
 const extensionDir = resolve("dist/cep");
 const manifestPath = join(extensionDir, "CSXS/manifest.xml");
-if (!existsSync(manifestPath)) throw new Error("Build output is missing. Run npm run build first.");
+if (!existsSync(manifestPath)) throw new Error("Build output is missing. Run bun run build first.");
 const manifest = readFileSync(manifestPath, "utf8");
 if (!manifest.includes(`ExtensionBundleVersion="${version}"`)) {
   throw new Error(`Manifest version does not match package.json ${version}.`);

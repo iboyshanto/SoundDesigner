@@ -14,11 +14,10 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react-jsx",
     "paths": {
       "@esTypes/*": ["./src/jsx"]
     }
   },
-  "include": ["./src"],
+  "include": ["./src/**/*.ts", "./src/**/*.svelte", "./vite.config.ts", "./vite.es.config.ts", "./cep.config.ts"],
   "exclude": ["./src/jsx"]
 }
