@@ -628,6 +628,8 @@ export const App = () => {
   const demoTimerRef = useRef<number | null>(null);
   const pendingPlayIdRef = useRef<string | null>(null);
   const togglePlayRef = useRef<() => void>(() => undefined);
+  const stopPlaybackRef = useRef<() => void>(() => undefined);
+  const playingRef = useRef(false);
   const toastIdRef = useRef(0);
   const tooltipTimerRef = useRef<number | null>(null);
   const persistedLibrarySignatureRef = useRef("");
@@ -981,6 +983,21 @@ export const App = () => {
     setPlaying(false);
     setProgress(reversed ? 1 : 0);
   };
+  stopPlaybackRef.current = stopPlayback;
+  playingRef.current = playing;
+
+  useEffect(() => {
+    const handOffPreviewToHost = () => {
+      const audioIsPlaying = Boolean(audioRef.current && !audioRef.current.paused);
+      const demoIsPlaying = demoTimerRef.current !== null;
+      if (!playingRef.current && !audioIsPlaying && !demoIsPlaying) return;
+      pendingPlayIdRef.current = null;
+      stopPlaybackRef.current();
+      setLoop(false);
+    };
+    window.addEventListener("blur", handOffPreviewToHost);
+    return () => window.removeEventListener("blur", handOffPreviewToHost);
+  }, []);
 
   const seek = (nextProgress: number) => {
     const safe = Math.max(0, Math.min(1, nextProgress));
