@@ -2,12 +2,12 @@
   import { onMount, untrack } from "svelte";
   import {
     chooseLibraryFolder,
-    createDemoLibrary,
     fileUrl,
     folderNameFromPath,
     loadLibraryPaths,
     nextAccent,
     saveLibraryPaths,
+    sameNativePath,
     scanFolder,
     waitForPanelPaint,
   } from "./library";
@@ -33,12 +33,6 @@
   import Transport from "./components/Transport.svelte";
   import "./main.scss";
 
-  const demoLibrary = createDemoLibrary();
-  const DEFAULT_TABS: SearchTab[] = [
-    { id: "search-impact", label: "Impact", query: "impact" },
-    { id: "search-room", label: "Room tone", query: "room tone" },
-    { id: "search-rise", label: "Risers", query: "rise" },
-  ];
   const FILTERS = [
     { id: "all", label: "All" },
     { id: "one-shot", label: "One shots" },
@@ -49,7 +43,35 @@
   const VIRTUALIZATION_THRESHOLD = 200;
   const VIRTUAL_OVERSCAN = 8;
   const PREFERENCES_STORAGE_KEY = "sounddesigner.preferences.v1";
+  const LIBRARY_WIDTH_STORAGE_KEY = "sounddesigner.library-width.v1";
+  const LIBRARY_MIN_WIDTH = 180;
+  const LIBRARY_MAX_WIDTH = 560;
+  const RESULTS_MIN_WIDTH = 320;
   const createLibraryTabs = (): SearchTab[] => [{ id: "search-library", label: "All sounds", query: "" }];
+
+  const loadLibraryWidth = () => {
+    try {
+      const raw = localStorage.getItem(LIBRARY_WIDTH_STORAGE_KEY);
+      const stored = raw === null ? Number.NaN : Number(raw);
+      if (Number.isFinite(stored)) return Math.max(LIBRARY_MIN_WIDTH, Math.min(LIBRARY_MAX_WIDTH, stored));
+    } catch (_error) {
+      // Use the balanced default when host policy blocks local storage.
+    }
+    return 220;
+  };
+
+  const clampLibraryWidth = (value: number) => {
+    const available = Math.max(LIBRARY_MIN_WIDTH, window.innerWidth - RESULTS_MIN_WIDTH);
+    return Math.round(Math.max(LIBRARY_MIN_WIDTH, Math.min(LIBRARY_MAX_WIDTH, available, value)));
+  };
+
+  const saveLibraryWidth = (value: number) => {
+    try {
+      localStorage.setItem(LIBRARY_WIDTH_STORAGE_KEY, String(Math.round(value)));
+    } catch (_error) {
+      // Resizing remains available for the current session.
+    }
+  };
 
   type AfterEffectsDragSession = {
     id: number;
@@ -81,13 +103,13 @@
 
   const preferences = loadPreferences();
   const host = detectHost();
-  let folders = $state<LibraryFolder[]>(demoLibrary.folders);
-  let sounds = $state<SoundFile[]>(demoLibrary.sounds);
+  let folders = $state<LibraryFolder[]>([]);
+  let sounds = $state<SoundFile[]>([]);
   let selectedFolder = $state("all");
-  let selectedId = $state(demoLibrary.sounds[0].id);
+  let selectedId = $state("");
   let folderQuery = $state("");
-  let tabs = $state<SearchTab[]>(DEFAULT_TABS);
-  let activeTabId = $state(DEFAULT_TABS[0].id);
+  let tabs = $state<SearchTab[]>(createLibraryTabs());
+  let activeTabId = $state("search-library");
   let filter = $state("all");
   let playing = $state(false);
   let progress = $state(0);
@@ -113,9 +135,11 @@
   let resultsList: HTMLDivElement;
   let resultsScrollTop = $state(0);
   let resultsViewportHeight = $state(600);
+  let pendingResultsScrollTop = 0;
+  let resultsScrollFrame = 0;
+  let libraryWidth = $state(loadLibraryWidth());
 
   let audio: HTMLAudioElement | null = null;
-  let demoTimer: number | null = null;
   let pendingPlayId: string | null = null;
   let toastId = 0;
   let tooltipTimer: number | null = null;
@@ -149,6 +173,7 @@
       if (filter === "favorites" && !sound.favorite) return false;
       if (filter === "ambience" && !sound.tags.includes("ambience") && sound.duration < 10) return false;
       if (filter === "one-shot" && sound.duration > 8) return false;
+      if (!queryTokens.length) return true;
       const haystack = `${sound.name} ${sound.tags.join(" ")} ${sound.extension}`.toLowerCase();
       return queryTokens.every((token) => haystack.includes(token));
     });
@@ -180,6 +205,61 @@
     persistedLibrarySignature = JSON.stringify(saveLibraryPaths(nextFolders));
   };
 
+  const setLibraryWidth = (value: number, persist = false) => {
+    libraryWidth = clampLibraryWidth(value);
+    if (persist) saveLibraryWidth(libraryWidth);
+  };
+
+  const startLibraryResize = (event: MouseEvent) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startWidth = libraryWidth;
+    let finished = false;
+    let move: (nextEvent: MouseEvent) => void;
+    document.documentElement.classList.add("is-resizing-library");
+
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      saveLibraryWidth(libraryWidth);
+      document.documentElement.classList.remove("is-resizing-library");
+      window.removeEventListener("mousemove", move, true);
+      window.removeEventListener("mouseup", finish, true);
+      window.removeEventListener("blur", finish);
+    };
+    move = (nextEvent: MouseEvent) => {
+      if ((nextEvent.buttons & 1) === 0) {
+        finish();
+        return;
+      }
+      nextEvent.preventDefault();
+      setLibraryWidth(startWidth + nextEvent.clientX - startX);
+    };
+    window.addEventListener("mousemove", move, true);
+    window.addEventListener("mouseup", finish, true);
+    window.addEventListener("blur", finish);
+  };
+
+  const handleResultsScroll = (event: Event & { currentTarget: HTMLDivElement }) => {
+    pendingResultsScrollTop = event.currentTarget.scrollTop;
+    if (resultsScrollFrame) return;
+    resultsScrollFrame = window.requestAnimationFrame(() => {
+      resultsScrollFrame = 0;
+      resultsScrollTop = pendingResultsScrollTop;
+    });
+  };
+
+  const resizeLibraryWithKeyboard = (event: KeyboardEvent) => {
+    if (event.key === "ArrowLeft") setLibraryWidth(libraryWidth - 12, true);
+    else if (event.key === "ArrowRight") setLibraryWidth(libraryWidth + 12, true);
+    else if (event.key === "Home") setLibraryWidth(LIBRARY_MIN_WIDTH, true);
+    else if (event.key === "End") setLibraryWidth(LIBRARY_MAX_WIDTH, true);
+    else return;
+    event.preventDefault();
+  };
+
   const refreshUpdates = async () => {
     updateState = { ...updateState, status: "checking", message: "Checking GitHub…" };
     const next = await checkForUpdates(true);
@@ -203,42 +283,18 @@
     updateDismissed = true;
   };
 
-  const stopDemoTimer = () => {
-    if (demoTimer !== null) window.clearInterval(demoTimer);
-    demoTimer = null;
-  };
-
   const togglePlay = () => {
-    if (!selected) return;
+    if (!selected?.path || !audio) return;
     if (playing) {
-      audio?.pause();
-      stopDemoTimer();
+      audio.pause();
       playing = false;
       return;
     }
-    if (selected.path && audio) {
-      if (reversed) notify("warning", "Reverse audition is queued for the non-destructive render engine; forward preview is playing.");
-      audio.play().then(() => { playing = true; }).catch(() => notify("error", "Audio preview could not start."));
-      return;
-    }
-    playing = true;
-    stopDemoTimer();
-    demoTimer = window.setInterval(() => {
-      const step = 0.04 / Math.max(1, selected?.duration || 1);
-      const next = reversed ? progress - step : progress + step;
-      if ((reversed && next <= 0) || (!reversed && next >= 1)) {
-        if (loop) progress = reversed ? 1 : 0;
-        else {
-          stopDemoTimer();
-          playing = false;
-          progress = reversed ? 0 : 1;
-        }
-      } else progress = next;
-    }, 40);
+    if (reversed) notify("warning", "Reverse audition is queued for the non-destructive render engine; forward preview is playing.");
+    audio.play().then(() => { playing = true; }).catch(() => notify("error", "Audio preview could not start."));
   };
 
   const stopPlayback = (playbackWasReversed = reversed) => {
-    stopDemoTimer();
     if (audio) {
       audio.pause();
       audio.currentTime = 0;
@@ -255,11 +311,18 @@
     previewChannels = [];
     if (!current?.path) return;
     let cancelled = false;
+    const stillSelected = () => !cancelled && selectedId === current.id;
     const decodeTimer = window.setTimeout(() => {
-      decodeAudioWaveformChannels(current.path, current.size, current.modifiedAt).then((channels) => {
-        if (!cancelled && selectedId === current.id) previewChannels = channels;
+      decodeAudioWaveformChannels(
+        current.path,
+        current.size,
+        current.modifiedAt,
+        current.duration,
+        stillSelected,
+      ).then((channels) => {
+        if (stillSelected()) previewChannels = channels;
       });
-    }, 120);
+    }, 500);
     return () => {
       cancelled = true;
       window.clearTimeout(decodeTimer);
@@ -284,7 +347,6 @@
       audio.pause();
       audio = null;
     }
-    stopDemoTimer();
     playing = false;
     progress = 0;
 
@@ -305,9 +367,11 @@
     nextAudio.loop = untrack(() => loop);
     const onTimeUpdate = () => { if (nextAudio.duration) progress = nextAudio.currentTime / nextAudio.duration; };
     const onLoadedMetadata = () => {
-      if (Number.isFinite(nextAudio.duration) && nextAudio.duration > 0) {
-        sounds = sounds.map((sound) => sound.id === currentSelected.id ? { ...sound, duration: nextAudio.duration } : sound);
-      }
+      if (
+        Number.isFinite(nextAudio.duration)
+        && nextAudio.duration > 0
+        && currentSelected.duration !== nextAudio.duration
+      ) currentSelected.duration = nextAudio.duration;
     };
     const onEnded = () => { if (!nextAudio.loop) { playing = false; progress = 1; } };
     const onError = () => {
@@ -431,7 +495,7 @@
     };
     const handOffPreviewToHost = () => {
       const audioIsPlaying = Boolean(audio && !audio.paused);
-      if (!playing && !audioIsPlaying && demoTimer === null) return;
+      if (!playing && !audioIsPlaying) return;
       pendingPlayId = null;
       stopPlayback();
       loop = false;
@@ -463,13 +527,13 @@
 
       if (!storedPaths.length) {
         if (isCrossHostRefresh && !cancelled) {
-          folders = demoLibrary.folders;
-          sounds = demoLibrary.sounds;
+          folders = [];
+          sounds = [];
           selectedFolder = "all";
-          selectedId = demoLibrary.sounds[0].id;
-          tabs = DEFAULT_TABS;
-          activeTabId = DEFAULT_TABS[0].id;
-          notify("info", "Shared library cleared. Demo folders restored.");
+          selectedId = "";
+          tabs = createLibraryTabs();
+          activeTabId = "search-library";
+          notify("info", "Shared library cleared. Add a folder when you are ready.");
         }
         libraryRestoreInProgress = false;
         return;
@@ -481,6 +545,9 @@
       const nextSounds: SoundFile[] = [];
       let completedFiles = 0;
       let completedFolders = 0;
+      let restoreSkippedPaths = 0;
+      let failedStoredPaths = 0;
+      let firstRestoreError = "";
       for (let index = 0; index < storedPaths.length; index += 1) {
         try {
           const result = await scanFolder(storedPaths[index], nextAccent(index), (nextProgress) => {
@@ -490,8 +557,11 @@
           nextSounds.push(...result.sounds);
           completedFiles += result.sounds.length;
           completedFolders += countTreeNodes(result.folder.tree);
-        } catch (_error) {
+          restoreSkippedPaths += result.diagnostics.unreadableDirectories + result.diagnostics.unreadableEntries;
+        } catch (error) {
           // Unavailable folders are skipped without corrupting the shared path list.
+          failedStoredPaths += 1;
+          if (!firstRestoreError) firstRestoreError = error instanceof Error ? error.message : "A saved library could not be opened.";
         }
       }
       if (!cancelled && nextFolders.length) {
@@ -501,8 +571,15 @@
         selectedId = nextSounds[0]?.id || "";
         tabs = createLibraryTabs();
         activeTabId = "search-library";
-        if (isCrossHostRefresh) notify("success", `Library synced · ${nextSounds.length} sounds`);
-      } else if (!cancelled && isCrossHostRefresh) notify("warning", "Shared library paths are currently unavailable on this computer.");
+        if (failedStoredPaths || restoreSkippedPaths) {
+          notify(
+            "warning",
+            `Library loaded - ${nextSounds.length} sounds - ${failedStoredPaths} libraries unavailable - ${restoreSkippedPaths} paths skipped`,
+          );
+        } else if (isCrossHostRefresh) notify("success", `Library synced · ${nextSounds.length} sounds`);
+      } else if (!cancelled) {
+        notify("warning", firstRestoreError || "Saved library paths are currently unavailable on this computer.");
+      }
       if (!cancelled) isIndexing = false;
       libraryRestoreInProgress = false;
     };
@@ -535,7 +612,7 @@
   };
 
   const addFolder = async () => {
-    notify("info", "Choose a sound-library folder…");
+    notify("info", "Choose a folder. Windows hides files while selecting folders.");
     await waitForPanelPaint();
     let chosen: string | null = null;
     try {
@@ -548,7 +625,7 @@
       notify(window.cep ? "info" : "warning", window.cep ? "No folder was selected." : "Folder picking is available inside the installed CEP panel.");
       return;
     }
-    if (folders.some((folder) => folder.path === chosen)) {
+    if (folders.some((folder) => sameNativePath(folder.path, chosen))) {
       notify("warning", "That folder is already indexed.");
       return;
     }
@@ -557,21 +634,29 @@
     notify("info", `Indexing ${folderNameFromPath(chosen)}…`);
     await waitForPanelPaint();
     try {
-      const realFolders = folders.filter((folder) => !folder.isDemo);
-      const result = await scanFolder(chosen, nextAccent(realFolders.length), (next) => { indexProgress = next; });
-      const nextFolders = [...realFolders, result.folder];
-      const nextSounds = [...sounds.filter((sound) => !sound.isDemo), ...result.sounds];
+      const result = await scanFolder(chosen, nextAccent(folders.length), (next) => { indexProgress = next; });
+      const nextFolders = [...folders, result.folder];
+      const nextSounds = [...sounds, ...result.sounds];
       folders = nextFolders;
       sounds = nextSounds;
       persistLibraryFolders(nextFolders);
       selectedFolder = result.folder.id;
       selectedId = result.sounds[0]?.id || "";
-      if (!realFolders.length) {
+      if (nextFolders.length === 1) {
         tabs = createLibraryTabs();
         activeTabId = "search-library";
       }
       indexProgress = { files: result.sounds.length, folders: countTreeNodes(result.folder.tree), currentPath: result.folder.path };
-      notify(result.sounds.length ? "success" : "warning", `${result.folder.name} indexed · ${result.sounds.length} sounds · ${countTreeNodes(result.folder.tree)} folders`);
+      const skippedPaths = result.diagnostics.unreadableDirectories + result.diagnostics.unreadableEntries;
+      const seenExtensions = result.diagnostics.extensionsSeen.length
+        ? ` - extensions: ${result.diagnostics.extensionsSeen.join(", ")}`
+        : "";
+      const scanMessage = !result.sounds.length
+        ? `${result.folder.name}: 0 supported sounds - scanned ${result.diagnostics.filesSeen} files via ${result.diagnostics.scanner.toUpperCase()}${seenExtensions}`
+        : skippedPaths
+          ? `${result.folder.name} indexed - ${result.sounds.length} sounds - ${skippedPaths} unreadable paths skipped`
+          : `${result.folder.name} indexed - ${result.sounds.length} sounds - ${countTreeNodes(result.folder.tree)} folders`;
+      notify(result.sounds.length && !skippedPaths ? "success" : "warning", scanMessage);
     } catch (error) {
       notify("error", error instanceof Error ? error.message : "The folder could not be indexed.");
     } finally {
@@ -580,8 +665,7 @@
   };
 
   const rescanAll = async () => {
-    const realFolders = folders.filter((folder) => !folder.isDemo);
-    if (!realFolders.length) { notify("info", "Add a real folder to start indexing."); return; }
+    if (!folders.length) { notify("info", "Add a sound folder to start indexing."); return; }
     isIndexing = true;
     indexProgress = { files: 0, folders: 0, currentPath: "" };
     notify("info", "Refreshing sound libraries…");
@@ -590,7 +674,9 @@
     const nextSounds: SoundFile[] = [];
     let completedFiles = 0;
     let completedFolders = 0;
-    for (const folder of realFolders) {
+    let skippedPaths = 0;
+    let failedLibraries = 0;
+    for (const folder of folders) {
       try {
         const result = await scanFolder(folder.path, folder.accent, (next) => {
           indexProgress = { files: completedFiles + next.files, folders: completedFolders + next.folders, currentPath: next.currentPath };
@@ -599,8 +685,16 @@
         nextSounds.push(...result.sounds);
         completedFiles += result.sounds.length;
         completedFolders += countTreeNodes(result.folder.tree);
-      } catch (_error) {
-        notify("error", `${folder.name} is unavailable.`);
+        skippedPaths += result.diagnostics.unreadableDirectories + result.diagnostics.unreadableEntries;
+      } catch (error) {
+        // Keep the last valid index and persisted folder path on transient Windows or drive errors.
+        const existingSounds = sounds.filter((sound) => sound.folderId === folder.id);
+        nextFolders.push(folder);
+        nextSounds.push(...existingSounds);
+        completedFiles += existingSounds.length;
+        completedFolders += countTreeNodes(folder.tree);
+        failedLibraries += 1;
+        notify("error", error instanceof Error ? error.message : `${folder.name} could not be refreshed.`);
       }
     }
     folders = nextFolders;
@@ -609,7 +703,11 @@
     persistLibraryFolders(nextFolders);
     isIndexing = false;
     indexProgress = { files: completedFiles, folders: completedFolders, currentPath: "" };
-    notify("success", `Library refreshed · ${nextSounds.length} sounds · ${completedFolders} folders`);
+    const refreshHasWarnings = failedLibraries > 0 || skippedPaths > 0;
+    const refreshDetail = refreshHasWarnings
+      ? ` - ${failedLibraries} libraries unavailable - ${skippedPaths} paths skipped`
+      : "";
+    notify(refreshHasWarnings ? "warning" : "success", `Library refreshed - ${nextSounds.length} sounds - ${completedFolders} folders${refreshDetail}`);
   };
 
   const insertSelected = async (soundOverride?: SoundFile | null) => {
@@ -629,18 +727,18 @@
   };
 
   const deleteSettingsFolder = () => {
-    if (!settingsFolder || settingsFolder.isDemo) return;
+    if (!settingsFolder) return;
     const deletedName = settingsFolder.name;
     const nextFolders = folders.filter((folder) => folder.id !== settingsFolder?.id);
     const nextSounds = sounds.filter((sound) => sound.folderId !== settingsFolder?.id);
-    folders = nextFolders.length ? nextFolders : demoLibrary.folders;
-    sounds = nextFolders.length ? nextSounds : demoLibrary.sounds;
+    folders = nextFolders;
+    sounds = nextSounds;
     persistLibraryFolders(nextFolders);
     selectedFolder = "all";
-    selectedId = (nextFolders.length ? nextSounds : demoLibrary.sounds)[0]?.id || "";
+    selectedId = nextSounds[0]?.id || "";
     if (!nextFolders.length) {
-      tabs = DEFAULT_TABS;
-      activeTabId = DEFAULT_TABS[0].id;
+      tabs = createLibraryTabs();
+      activeTabId = "search-library";
     }
     settingsOpen = false;
     notify("info", `${deletedName} removed from SoundDesigner. Files were kept.`);
@@ -770,7 +868,7 @@
     <IconButton icon="settings" label="Open panel settings" onclick={() => { settingsFolderId = null; settingsOpen = true; }} />
   </header>
 
-  <main class="panel-body">
+  <main class="panel-body" style={`--library-width: ${libraryWidth}px`}>
     <LibrarySidebar
       {folders} {sounds} {selectedFolder} query={folderQuery} indexing={isIndexing} {indexProgress} {now}
       onSelectFolder={(id) => { selectedFolder = id; sidebarOpen = false; }}
@@ -784,6 +882,21 @@
       onOpenUpdate={openUpdate}
       onDismissUpdate={dismissAvailableUpdate}
     />
+
+    <div
+      aria-label="Library panel width"
+      aria-orientation="vertical"
+      aria-valuemax={LIBRARY_MAX_WIDTH}
+      aria-valuemin={LIBRARY_MIN_WIDTH}
+      aria-valuenow={libraryWidth}
+      aria-valuetext={`${libraryWidth} pixels wide`}
+      class="library-resizer tooltip"
+      data-tooltip="Drag left or right to resize library"
+      onkeydown={resizeLibraryWithKeyboard}
+      onmousedown={startLibraryResize}
+      role="slider"
+      tabindex="0"
+    ></div>
 
     <button aria-label="Close library drawer" class="drawer-scrim" onclick={() => sidebarOpen = false} type="button"></button>
 
@@ -832,9 +945,16 @@
           class="results-list"
           role="listbox"
           aria-label="Sound results"
-          onscroll={(event) => resultsScrollTop = event.currentTarget.scrollTop}
+          onscroll={handleResultsScroll}
         >
-          {#if visibleSounds.length}
+          {#if !folders.length}
+            <div class="empty-state empty-state--library">
+              <span class="empty-glyph"><Icon name="folder" size={22} /></span>
+              <strong>Add your sound library</strong>
+              <span>Choose a top-level folder. SoundDesigner will preserve every nested folder in the library tree.</span>
+              <button class="primary-button" onclick={addFolder} type="button"><Icon name="add" /> Add sound folder</button>
+            </div>
+          {:else if visibleSounds.length}
             {#if virtualTopSpace}<div class="results-spacer" style:height={`${virtualTopSpace}px`}></div>{/if}
             {#each renderedSounds as sound (sound.id)}
               <SoundRow

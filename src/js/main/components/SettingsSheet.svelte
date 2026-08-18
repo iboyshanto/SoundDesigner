@@ -76,7 +76,7 @@
         </div>
       </div>
       <footer class="sheet-footer">
-        <button class="danger-ghost" disabled={!folder || folder.isDemo} onclick={onDelete} type="button"><Icon name="trash" /> Remove library</button>
+        <button class="danger-ghost" disabled={!folder} onclick={onDelete} type="button"><Icon name="trash" /> Remove library</button>
         <div><button class="ghost-button" onclick={onClose} type="button">Cancel</button><button class="primary-button" onclick={() => { onAutoPreview(draftAutoPreview); onLoop(draftLoop); onClose(); }} type="button">Save changes</button></div>
       </footer>
     </section>

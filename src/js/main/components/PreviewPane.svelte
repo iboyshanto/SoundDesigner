@@ -1,6 +1,5 @@
 <script lang="ts">
   import type { SoundFile } from "../types";
-  import { createDemoLibrary } from "../library";
   import { formatDuration, formatSize } from "../ui-utils";
   import IconButton from "./IconButton.svelte";
   import ChannelWaveform from "./ChannelWaveform.svelte";
@@ -16,7 +15,7 @@
     onZoomOut: () => void;
   } = $props();
 
-  const fallbackWaveform = createDemoLibrary().sounds[0].waveform;
+  const fallbackWaveform = new Float32Array([0]);
 </script>
 
 <section class="preview-pane">
@@ -40,7 +39,7 @@
       type="button"
     ></button>
     {#key sound?.id || "empty"}
-      <ChannelWaveform {channels} fallback={sound ? sound.waveform : fallbackWaveform} {progress} {zoom} {reversed} />
+      <ChannelWaveform {channels} fallback={sound ? sound.waveform : fallbackWaveform} {progress} {zoom} {reversed} showModeControls={Boolean(sound)} />
     {/key}
   </div>
   <div class="preview-aside">
@@ -48,10 +47,12 @@
       <div><span>Format</span><strong>{sound ? sound.extension.toUpperCase() : "—"}</strong></div>
       <div><span>Size</span><strong>{sound ? formatSize(sound.size) : "—"}</strong></div>
       <div><span>Length</span><strong>{sound && sound.duration ? formatDuration(sound.duration) : "On load"}</strong></div>
-      <div><span>Source</span><strong>{sound?.isDemo ? "Demo" : sound ? "Local" : "—"}</strong></div>
+      <div><span>Source</span><strong>{sound ? "Local" : "—"}</strong></div>
     </div>
-    <div class="tag-row">
-      {#each (sound?.tags || ["select", "a sound"]).slice(0, 5) as tag (tag)}<span class="tag-chip">{tag}</span>{/each}
-    </div>
+    {#if sound}
+      <div class="tag-row">
+        {#each sound.tags.slice(0, 5) as tag (tag)}<span class="tag-chip">{tag}</span>{/each}
+      </div>
+    {/if}
   </div>
 </section>

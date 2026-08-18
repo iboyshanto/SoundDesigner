@@ -26,10 +26,10 @@
 
 <div
   class={`sound-row accent-${sound.accent} ${selected ? "is-selected" : ""}`}
-  draggable={!sound.isDemo}
+  draggable={Boolean(sound.path)}
   onclick={onSelect}
   ondblclick={onInsert}
-  onpointerdown={(event) => { if (!sound.isDemo && event.button === 0) onDragPrepare(); }}
+  onpointerdown={(event) => { if (sound.path && event.button === 0) onDragPrepare(); }}
   ondragstart={onDragStart}
   ondragend={onDragEnd}
   onkeydown={(event) => {
@@ -39,12 +39,12 @@
   aria-selected={selected}
   tabindex="0"
 >
-  <span class="drag-handle tooltip" data-tooltip={sound.isDemo ? "Demo sound" : dragHint}><Icon name="drag" /></span>
+  <span class="drag-handle tooltip" data-tooltip={dragHint}><Icon name="drag" /></span>
   <button aria-label={playing ? `Pause ${sound.name}` : `Preview ${sound.name}`} class="row-play tooltip" data-tooltip={playing ? "Pause preview" : "Preview sound"} onclick={(event) => { event.stopPropagation(); onPlay(); }} type="button">
     <Icon name={playing ? "pause" : "play"} size={14} />
   </button>
   <div class="sound-main">
-    <div class="sound-title-line"><strong>{sound.name}</strong>{#if sound.isDemo}<span class="demo-badge">DEMO</span>{/if}</div>
+    <div class="sound-title-line"><strong>{sound.name}</strong></div>
     <Waveform compact values={sound.waveform} {channels} progress={playing ? progress : 0} />
   </div>
   <div class="sound-meta"><span>{sound.duration ? formatDuration(sound.duration) : "—:—"}</span><small>{sound.extension.toUpperCase()} · {formatSize(sound.size)}</small></div>

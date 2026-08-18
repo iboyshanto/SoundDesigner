@@ -19,7 +19,7 @@ export const detectHost = (): HostApp => {
 
 export const insertAudioInHost = async (request: InsertAudioRequest): Promise<HostResult> => {
   if (!request.path) {
-    return { ok: false, message: "Demo sounds cannot be inserted. Add a real library folder first." };
+    return { ok: false, message: "This sound has no local source file. Add or rescan its library folder." };
   }
   if (!window.cep) {
     return { ok: true, host: "browser", message: "Insert simulated in browser preview." };

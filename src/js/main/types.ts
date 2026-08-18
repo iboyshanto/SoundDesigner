@@ -20,7 +20,6 @@ export type LibraryFolder = {
   accent: AccentName;
   indexedAt: number;
   tree: LibraryTreeNode;
-  isDemo?: boolean;
 };
 
 export type SoundFile = {
@@ -37,7 +36,6 @@ export type SoundFile = {
   waveform: Float32Array;
   accent: AccentName;
   favorite?: boolean;
-  isDemo?: boolean;
 };
 
 export type ScanProgress = {

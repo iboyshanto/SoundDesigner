@@ -3,8 +3,9 @@ import { fs } from "../lib/cep/node";
 // Keep enough source detail for the 3x preview zoom while the renderer caps the
 // number of SVG points it draws. This remains tiny compared with decoded audio:
 // roughly 24 KB per channel rather than retaining full PCM sample buffers.
-const PEAK_BINS = 3072;
-const MAX_DECODE_BYTES = 96 * 1024 * 1024;
+const PEAK_BINS = 1536;
+const MAX_DECODE_BYTES = 32 * 1024 * 1024;
+const MAX_DECODE_DURATION_SECONDS = 120;
 const MAX_CACHE_ENTRIES = 8;
 const channelCache = new Map<string, Float32Array[]>();
 
@@ -51,8 +52,17 @@ export const decodeAudioWaveformChannels = async (
   filePath: string,
   fileSize: number,
   modifiedAt: number,
+  durationSeconds = 0,
+  shouldContinue?: () => boolean,
 ): Promise<Float32Array[]> => {
-  if (!filePath || !window.cep || fileSize > MAX_DECODE_BYTES || typeof fs.readFile !== "function") return [];
+  if (
+    !filePath
+    || !window.cep
+    || fileSize > MAX_DECODE_BYTES
+    || durationSeconds > MAX_DECODE_DURATION_SECONDS
+    || typeof fs.readFile !== "function"
+    || (shouldContinue && !shouldContinue())
+  ) return [];
   const cacheKey = `${filePath}:${modifiedAt}:${fileSize}`;
   const cached = channelCache.get(cacheKey);
   if (cached) {
@@ -62,9 +72,12 @@ export const decodeAudioWaveformChannels = async (
 
   const AudioContextConstructor = window.AudioContext;
   if (!AudioContextConstructor) return [];
-  const context = new AudioContextConstructor();
+
+  let context: AudioContext | null = null;
   try {
     const bytes = await readAudioFile(filePath);
+    if (shouldContinue && !shouldContinue()) return [];
+    context = new AudioContextConstructor();
     const audioBuffer = await context.decodeAudioData(bytes);
     const channels: Float32Array[] = [];
     for (let channel = 0; channel < audioBuffer.numberOfChannels; channel += 1) {
@@ -75,6 +88,6 @@ export const decodeAudioWaveformChannels = async (
   } catch (_error) {
     return [];
   } finally {
-    try { await context.close(); } catch (_error) {}
+    try { if (context) await context.close(); } catch (_error) {}
   }
 };
