@@ -7,8 +7,9 @@ SoundDesigner is a dockable Adobe CEP extension for managing, searching, preview
 - Recursive sound-library indexing with the original folder hierarchy
 - Persistent libraries with collapsed folder trees on startup
 - Multiple independent search tabs
-- Audio preview, looping, waveform navigation, volume, favorites, and filters
-- Double-click insertion and CEP drag-and-drop support
+- Audio preview, looping, decoded multichannel waveform navigation, volume, favorites, and filters
+- Double-click insertion and CEP drag-and-drop support, including an After Effects active-composition fallback
+- Automatic `SoundDesigner` Project-panel folder/bin organization for every inserted or dragged sound
 - Premiere Pro and After Effects host adapters
 - Native-feeling graphite interface designed for compact Adobe panels
 - Built-in stable GitHub Release update notifications
@@ -23,14 +24,14 @@ Adobe host versions and operating-system combinations should be tested against t
 
 ## Development
 
-Requirements: Node.js and npm.
+Requirements: Bun 1.3+ and Node.js for CEP release tooling.
 
 ```sh
-npm ci
-npm run build
+bun install --frozen-lockfile
+bun run build
 ```
 
-The panel uses React and is compiled for the Chromium runtime declared by CSXS 9. Host-side code is bundled separately for ExtendScript/ES3 compatibility.
+The panel uses Svelte 5 and is compiled for the Chromium 88 runtime in CEP 11. Host-side code is bundled separately for ExtendScript/ES3 compatibility. The minimum supported hosts are Premiere Pro 15.4 and After Effects 18.4.
 
 ## Publishing updates
 

@@ -68,12 +68,12 @@ const hashString = (value: string) => {
 
 export const makeWaveform = (seed: string, bars = 72) => {
   let value = hashString(seed) || 1;
-  const waveform: number[] = [];
+  const waveform = new Float32Array(bars);
   for (let index = 0; index < bars; index += 1) {
     value = (value * 1664525 + 1013904223) >>> 0;
     const noise = (value % 1000) / 1000;
     const envelope = 0.44 + Math.sin((index / bars) * Math.PI) * 0.56;
-    waveform.push(Math.max(0.12, Math.min(1, (0.2 + noise * 0.8) * envelope)));
+    waveform[index] = Math.max(0.12, Math.min(1, (0.2 + noise * 0.8) * envelope));
   }
   return waveform;
 };

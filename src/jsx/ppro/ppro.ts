@@ -79,6 +79,44 @@ function findOrCreateSoundDesignerBin(root: ProjectItem): ProjectItem {
   return root.createBin("SoundDesigner");
 }
 
+function collectProjectItemsOutsideBin(parent: ProjectItem, excludedBin: ProjectItem, mediaPath: string, matches: ProjectItem[]): void {
+  var children: ProjectItemCollection;
+  var index: number;
+  var child: ProjectItem;
+  var childPath: string;
+  try {
+    if (parent.nodeId === excludedBin.nodeId) return;
+    children = parent.children;
+    if (!children) return;
+    for (index = 0; index < children.numItems; index += 1) {
+      child = children[index];
+      try {
+        childPath = child.getMediaPath();
+        if (childPath && normalizePath(childPath) === mediaPath) matches.push(child);
+      } catch (_mediaError) {
+        // Bins and offline items may not expose a media path.
+      }
+      try {
+        if (child.children && child.children.numItems > 0) {
+          collectProjectItemsOutsideBin(child, excludedBin, mediaPath, matches);
+        }
+      } catch (_childrenError) {
+        // Leaf project items do not have traversable children in every version.
+      }
+    }
+  } catch (_error) {
+    // Ignore project branches that Premiere cannot currently traverse.
+  }
+}
+
+function moveProjectItemsToSoundDesigner(root: ProjectItem, normalizedPath: string, targetBin: ProjectItem): number {
+  var matches: ProjectItem[] = [];
+  var index: number;
+  collectProjectItemsOutsideBin(root, targetBin, normalizedPath, matches);
+  for (index = 0; index < matches.length; index += 1) matches[index].moveBin(targetBin);
+  return matches.length;
+}
+
 function getAudioDurationSeconds(projectItem: ProjectItem): number {
   var inPoint: Time;
   var outPoint: Time;
@@ -145,6 +183,45 @@ function createAudioTrack(sequence: Sequence): number {
   }
 }
 
+/** Moves host-imported audio into the shared SoundDesigner Project-panel bin. */
+export function organizeAudioMedia(request: InsertAudioRequest): HostResult {
+  var project: Project;
+  var sourceFile: File;
+  var normalizedPath: string;
+  var projectItem: ProjectItem | null;
+  var targetBin: ProjectItem;
+  var moved: boolean;
+  try {
+    if (!request || typeof request.path !== "string" || request.path.length === 0) {
+      return { ok: false, host: "premiere", message: "No audio file path was provided." };
+    }
+    sourceFile = new File(request.path);
+    if (!app.project) {
+      return { ok: false, host: "premiere", message: "Open a Premiere Pro project before organizing audio." };
+    }
+    project = app.project;
+    normalizedPath = normalizePath(sourceFile.fsName);
+    projectItem = findProjectItem(project.rootItem, normalizedPath);
+    if (!projectItem) {
+      return { ok: false, host: "premiere", message: "The audio project item is not available yet." };
+    }
+    targetBin = findOrCreateSoundDesignerBin(project.rootItem);
+    moved = moveProjectItemsToSoundDesigner(project.rootItem, normalizedPath, targetBin) > 0;
+    return {
+      ok: true,
+      host: "premiere",
+      imported: false,
+      message: moved ? "Audio moved into the SoundDesigner bin." : "Audio is already in the SoundDesigner bin.",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      host: "premiere",
+      message: error && error.toString ? error.toString() : "Could not organize the Premiere Pro project item.",
+    };
+  }
+}
+
 /**
  * Premiere Pro host adapter. This TypeScript is compiled to ES3 before CEP loads it.
  * The public function accepts and returns plain JSON-compatible objects only.
@@ -182,9 +259,9 @@ export function insertAudioClip(request: InsertAudioRequest): HostResult {
     }
 
     normalizedPath = normalizePath(sourceFile.fsName);
+    targetBin = findOrCreateSoundDesignerBin(project.rootItem);
     projectItem = findProjectItem(project.rootItem, normalizedPath);
     if (!projectItem) {
-      targetBin = findOrCreateSoundDesignerBin(project.rootItem);
       if (!project.importFiles([sourceFile.fsName], true, targetBin, false)) {
         return { ok: false, host: "premiere", message: "Premiere Pro could not import this audio file." };
       }
@@ -194,6 +271,8 @@ export function insertAudioClip(request: InsertAudioRequest): HostResult {
     if (!projectItem) {
       return { ok: false, host: "premiere", message: "The file imported, but its project item could not be resolved." };
     }
+    moveProjectItemsToSoundDesigner(project.rootItem, normalizedPath, targetBin);
+    projectItem = findProjectItem(targetBin, normalizedPath) || projectItem;
 
     playhead = sequence.getPlayerPosition();
     playheadSeconds = Number(playhead.seconds);

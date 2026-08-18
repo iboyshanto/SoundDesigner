@@ -34,7 +34,7 @@ export type SoundFile = {
   modifiedAt: number;
   duration: number;
   tags: string[];
-  waveform: number[];
+  waveform: Float32Array;
   accent: AccentName;
   favorite?: boolean;
   isDemo?: boolean;

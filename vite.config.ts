@@ -1,13 +1,12 @@
 import { defineConfig } from "vite";
-
-import react from "@vitejs/plugin-react";
+import { svelte } from "@sveltejs/vite-plugin-svelte";
 
 import { cep, CepOptions, runAction } from "vite-cep-plugin";
 import cepConfig from "./cep.config";
 import path from "path";
 import { extendscriptConfig } from "./vite.es.config";
 
-const extensions = [".js", ".ts", ".tsx"];
+const extensions = [".js", ".ts"];
 
 const devDist = "dist";
 const cepDist = "cep";
@@ -22,6 +21,7 @@ const isReleaseBuild = process.env.SOUNDDESIGNER_RELEASE_BUILD === "true";
 const isMetaPackage = process.env.ZIP_PACKAGE === "true";
 const isPackage = process.env.ZXP_PACKAGE === "true" || isMetaPackage;
 const isServe = process.env.SERVE_PANEL === "true";
+const isWatchBuild = process.env.BOLT_WATCH === "true";
 const action = process.env.BOLT_ACTION;
 
 let input: { [key: string]: string } = {};
@@ -48,7 +48,7 @@ if (action) runAction(config, action);
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
-    react(),
+    svelte({ configFile: path.resolve(__dirname, "svelte.config.js") }),
     cep(config),
   ],
   resolve: {
@@ -65,9 +65,7 @@ export default defineConfig({
 
   build: {
     sourcemap: isReleaseBuild ? cepConfig.zxp.sourceMap : isPackage ? cepConfig.zxp.sourceMap : cepConfig.build?.sourceMap,
-    watch: {
-      include: "src/jsx/**",
-    },
+    watch: isWatchBuild ? { include: "src/jsx/**" } : undefined,
     // commonjsOptions: {
     //   transformMixedEsModules: true,
     // },
@@ -82,8 +80,8 @@ export default defineConfig({
         chunkFileNames: "assets/[name]-[hash].cjs",
       },
     },
-    // CSXS 9 embeds Chromium 61; keep panel syntax aligned with the declared runtime.
-    target: "chrome61",
+    // Svelte supports Chromium 87+; CEP 11 embeds Chromium 88.
+    target: "chrome88",
     outDir,
   },
 });

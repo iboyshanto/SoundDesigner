@@ -5,7 +5,7 @@ The panel checks the public GitHub repository `iboyshanto/SoundDesigner` for the
 ## One-time setup
 
 1. Create the public repository `https://github.com/iboyshanto/SoundDesigner` or change `UPDATE_REPOSITORY` in `src/js/main/updater.ts` before the first public build.
-2. Create and securely back up one persistent `.p12` publisher certificate. Do not use `npm run zxp` for production releases: the current Vite CEP packaging configuration creates a new self-signed identity each time.
+2. Create and securely back up one persistent `.p12` publisher certificate. Do not use `bun run zxp` for production releases: the current Vite CEP packaging configuration creates a new self-signed identity each time.
 3. Keep the certificate and password outside Git. Never commit either one.
 4. Test the signed package on macOS and Windows with the installer/distribution path you publish to users.
 
@@ -19,7 +19,7 @@ The panel checks the public GitHub repository `iboyshanto/SoundDesigner` for the
    ```sh
    SOUNDDESIGNER_ZXP_CERT=/absolute/path/publisher.p12 \
    SOUNDDESIGNER_ZXP_PASSWORD='your-password' \
-   npm run release:package
+   bun run release:package
    ```
 
    Windows PowerShell:
@@ -27,7 +27,7 @@ The panel checks the public GitHub repository `iboyshanto/SoundDesigner` for the
    ```powershell
    $env:SOUNDDESIGNER_ZXP_CERT = 'C:\secure\publisher.p12'
    $env:SOUNDDESIGNER_ZXP_PASSWORD = 'your-password'
-   npm run release:package
+   bun run release:package
    ```
 
 3. Install and smoke-test `release/SoundDesigner-v1.2.3.zxp` in supported Premiere Pro and After Effects versions on both operating systems.
