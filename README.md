@@ -125,18 +125,63 @@
 
 ### Freesound Setup
 
-Freesound requires an API credential on every request. **SoundDesigner deliberately does not scrape the website or ship a shared secret key.**
+Freesound requires an API credential for in-panel searches. **SoundDesigner deliberately does not scrape the website or include a shared API key.** Each user connects their own Freesound account.
 
-1. Create or sign in to a [Freesound account](https://freesound.org/home/register/).
-2. Open [Freesound API credentials](https://freesound.org/apiv2/apply/) and register SoundDesigner as your application.
-3. Copy the generated API key.
-4. In SoundDesigner, navigate to **Settings > Freesound** and enable **Freesound library**.
-5. Paste your key and save. Keep **Local** enabled to search both sources simultaneously.
+#### 1. Request an API credential
+
+1. [Create a Freesound account](https://freesound.org/home/register/) or sign in to an existing account.
+2. Open the [Freesound API credentials page](https://freesound.org/apiv2/apply/).
+3. Under **Create new API credentials**, enter the following values:
+
+   | Field | Value |
+   | --- | --- |
+   | **Name** | `SoundDesigner` |
+   | **URL** | `https://github.com/iboyshanto/SoundDesigner` |
+   | **Callback URL** | `http://freesound.org/home/app_permissions/permission_granted/` |
+
+   SoundDesigner uses token authentication rather than an OAuth2 login flow, so it does not receive callback requests. The Freesound-hosted callback above is the fallback provided for desktop and non-server applications.
+4. Submit the form and wait for the credential to appear in the table at the top of the page.
+
+#### 2. Copy the correct value
+
+Copy the long value under **Client secret/API key**. Do **not** copy the shorter **Client ID**—SoundDesigner needs the API key.
+
+Treat the API key like a password:
+
+- Do not post it in screenshots, issues, or discussions.
+- Do not commit it to this repository.
+- Do not share one key between distributed copies of the extension.
+- If it is exposed, delete or regenerate the credential from Freesound.
+
+#### 3. Connect SoundDesigner
+
+1. Open SoundDesigner in Premiere Pro or After Effects.
+2. Open **Settings** and find the **Freesound** section.
+3. Enable **Freesound library**.
+4. Paste the value from **Client secret/API key** into **Personal API key**.
+5. Select the desired license filter and click **Save changes**.
+6. In the Library panel, enable **Freesound**. Keep **Local** enabled if both sources should be searched together.
+7. Enter at least two characters in Search. Cloud results should appear with the cloud source icon.
+
+#### Authentication and licensing
+
+- SoundDesigner uses Freesound's token-authenticated, read-only search and preview workflow; OAuth2 authorization is not required.
+- Freesound API access is free for non-commercial use. Commercial API use requires separate permission or licensing from Freesound.
+- Every sound retains its own license. A CC0 result and a CC BY result do not have the same attribution requirements.
+- The selected license filter applies to cloud searches, but users remain responsible for checking the license shown for each sound.
 
 > [!NOTE]
 > Disabling the Freesound library stops cloud requests while retaining your key. You can also browse Freesound without a key via your default browser using the **Browse without key** setting.
 > 
 > Results and low-bandwidth waveform previews are requested only while the Freesound source is active and a search is entered. Audio is downloaded only when the user explicitly downloads, inserts, or prepares a drag. See the official [authentication documentation](https://freesound.org/docs/api/authentication.html) and [API terms](https://freesound.org/help/tos_api/).
+
+#### Troubleshooting
+
+- **No Freesound source in the Library panel:** Enable **Freesound library** in Settings and save the changes.
+- **No cloud results:** Confirm Freesound is checked in the Library panel, enter at least two search characters, and verify the API key was copied without surrounding spaces.
+- **Unauthorized or invalid-key error:** Return to the credentials page and copy **Client secret/API key**, not **Client ID**.
+- **Local results only:** Both sources can be enabled independently; make sure the Freesound source checkbox is active.
+- **Commercial project:** Contact Freesound for API permission before using the integration commercially, then review the license of every selected sound.
 
 ### Project Audio & Conversion
 
