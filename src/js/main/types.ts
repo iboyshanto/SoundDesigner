@@ -2,6 +2,34 @@ export type HostApp = "premiere" | "aftereffects" | "browser" | "unknown";
 
 export type AccentName = "graphite";
 
+export type SoundSource = "local" | "freesound";
+
+export type AudioConversionPolicy = "unsupported" | "always" | "never";
+
+export type AudioNormalization = "preserve" | "peak-minus-one";
+
+export type AudioSegmentSelection = {
+  start: number;
+  end: number;
+};
+
+export type InsertionTarget = "playhead" | "selected-clip";
+
+export type FreesoundLicenseFilter = "commercial" | "cc0" | "all";
+
+export type SoundDesignerPreferences = {
+  autoPreview: boolean;
+  loop: boolean;
+  localSourceEnabled: boolean;
+  freesoundLibraryEnabled: boolean;
+  freesoundSourceEnabled: boolean;
+  insertionTarget: InsertionTarget;
+  conversionPolicy: AudioConversionPolicy;
+  normalization: AudioNormalization;
+  freesoundApiKey: string;
+  freesoundLicenseFilter: FreesoundLicenseFilter;
+};
+
 export type LibraryTreeNode = {
   id: string;
   rootId: string;
@@ -36,6 +64,19 @@ export type SoundFile = {
   waveform: Float32Array;
   accent: AccentName;
   favorite?: boolean;
+  source?: SoundSource;
+  sourceId?: string;
+  sourceUrl?: string;
+  previewUrl?: string;
+  creator?: string;
+  license?: string;
+  channels?: number;
+  sampleRate?: number;
+  downloadState?: "remote" | "downloading" | "ready" | "error";
+  preparedProjectPath?: string;
+  preparedProfile?: string;
+  originalPath?: string;
+  originalExtension?: string;
 };
 
 export type ScanProgress = {
@@ -60,6 +101,7 @@ export type InsertAudioRequest = {
   path: string;
   name: string;
   targetAudioTrack: number;
+  insertionTarget?: InsertionTarget;
 };
 
 export type HostResult = {
@@ -68,4 +110,13 @@ export type HostResult = {
   host?: string;
   imported?: boolean;
   trackIndex?: number;
+};
+
+export type HostProjectContext = {
+  ok: boolean;
+  host: HostApp | string;
+  projectPath?: string;
+  projectDirectory?: string;
+  projectName?: string;
+  message: string;
 };

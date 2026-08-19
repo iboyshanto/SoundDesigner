@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { platform } from "node:os";
 import { spawnSync } from "node:child_process";
@@ -30,6 +30,20 @@ if (!certPath || !password) {
 }
 const certificate = resolve(certPath);
 if (!existsSync(certificate)) throw new Error(`Publisher certificate was not found: ${certificate}`);
+
+const debugPath = join(extensionDir, ".debug");
+if (existsSync(debugPath)) unlinkSync(debugPath);
+
+const findSourceMaps = (directory) =>
+  readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = join(directory, entry.name);
+    if (entry.isDirectory()) return findSourceMaps(entryPath);
+    return entry.name.endsWith(".map") ? [entryPath] : [];
+  });
+const sourceMaps = findSourceMaps(extensionDir);
+if (sourceMaps.length > 0) {
+  throw new Error(`Release payload contains source maps: ${sourceMaps.join(", ")}`);
+}
 
 const signer = resolve("node_modules/vite-cep-plugin/lib/bin", platform() === "win32" ? "ZXPSignCmd.exe" : "ZXPSignCmd");
 if (!existsSync(signer)) throw new Error(`ZXPSignCmd was not found: ${signer}`);

@@ -1,7 +1,7 @@
 <script lang="ts">
   export type IconName =
-    | "activity" | "add" | "back" | "chevron" | "close" | "collapse" | "download"
-    | "drag" | "folder" | "forward" | "heart" | "library" | "list" | "loop"
+    | "activity" | "add" | "back" | "check" | "chevron" | "close" | "collapse" | "download"
+    | "cloud" | "cloudCheck" | "drive" | "drag" | "folder" | "forward" | "heart" | "library" | "list" | "loop"
     | "minus" | "more" | "next" | "pause" | "play" | "previous" | "refresh"
     | "reverse" | "search" | "settings" | "sliders" | "sparkles" | "stop"
     | "trash" | "volume" | "waveform" | "zoomIn" | "zoomOut";
@@ -12,10 +12,14 @@
     activity: '<path d="M3 12h3l2.2-6 3.2 12L14 9l2 3h5" />',
     add: '<path d="M12 5v14M5 12h14" />',
     back: '<path d="m15 18-6-6 6-6" />',
+    check: '<path d="m5 12 4 4L19 6" />',
     chevron: '<path d="m8 10 4 4 4-4" />',
     close: '<path d="m7 7 10 10M17 7 7 17" />',
+    cloud: '<path d="M7 18h10a4 4 0 0 0 .5-8A6 6 0 0 0 6 8.5 4.8 4.8 0 0 0 7 18Z" />',
+    cloudCheck: '<path d="M7 18h10a4 4 0 0 0 .5-8A6 6 0 0 0 6 8.5 4.8 4.8 0 0 0 7 18Z" /><path d="m9.5 13 1.8 1.8 3.5-4" />',
     collapse: '<path d="m9 18-6-6 6-6M15 6l6 6-6 6" />',
     download: '<path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14" />',
+    drive: '<path d="M5 6h14l2 9H3l2-9Z" /><path d="M3 15v3h18v-3M16.5 16.5h.01M13.5 16.5h.01" />',
     drag: '<path d="M8 6h.01M8 12h.01M8 18h.01M16 6h.01M16 12h.01M16 18h.01" />',
     folder: '<path d="M3 7.5h7l2-2h9v13H3z" />',
     forward: '<path d="m9 18 6-6-6-6" />',

@@ -1,5 +1,5 @@
 import { csi, evalTS } from "../lib/utils/bolt";
-import type { HostApp, HostResult, InsertAudioRequest } from "./types";
+import type { HostApp, HostProjectContext, HostResult, InsertAudioRequest } from "./types";
 
 export type AfterEffectsAudioDragState = {
   ok: boolean;
@@ -15,6 +15,24 @@ export const detectHost = (): HostApp => {
   if (applicationId.indexOf("PPRO") > -1) return "premiere";
   if (applicationId.indexOf("AEFT") > -1) return "aftereffects";
   return "unknown";
+};
+
+export const getHostProjectContext = async (): Promise<HostProjectContext> => {
+  const host = detectHost();
+  if (!window.cep || host === "browser") {
+    return { ok: false, host: "browser", message: "Project storage is available inside the installed Adobe panel." };
+  }
+  try {
+    return await evalTS("getProjectContext") as HostProjectContext;
+  } catch (error) {
+    return {
+      ok: false,
+      host,
+      message: error && typeof error === "object" && "message" in error
+        ? String((error as { message: unknown }).message)
+        : String(error || "The Adobe project location could not be read."),
+    };
+  }
 };
 
 export const insertAudioInHost = async (request: InsertAudioRequest): Promise<HostResult> => {

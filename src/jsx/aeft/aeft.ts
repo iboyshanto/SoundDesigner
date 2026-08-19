@@ -12,6 +12,7 @@ type InsertAudioRequest = {
   path: string;
   name: string;
   targetAudioTrack: number;
+  insertionTarget?: "playhead" | "selected-clip";
 };
 
 type HostResult = {
@@ -28,6 +29,45 @@ type AudioDragState = {
   layerCount: number;
   message: string;
 };
+
+type ProjectContext = {
+  ok: boolean;
+  host: string;
+  projectPath?: string;
+  projectDirectory?: string;
+  projectName?: string;
+  message: string;
+};
+
+/** Returns the saved project location used for project-scoped SoundDesigner media. */
+export function getProjectContext(): ProjectContext {
+  var projectFile: File;
+  var projectName: string;
+  try {
+    if (!app.project) {
+      return { ok: false, host: "aftereffects", message: "Open an After Effects project before downloading audio." };
+    }
+    if (!app.project.file) {
+      return { ok: false, host: "aftereffects", message: "Save the After Effects project before downloading project audio." };
+    }
+    projectFile = app.project.file;
+    projectName = String(projectFile.displayName || projectFile.name || "After Effects Project").replace(/\.[^.]+$/, "");
+    return {
+      ok: true,
+      host: "aftereffects",
+      projectPath: String(projectFile.fsName),
+      projectDirectory: String(projectFile.parent.fsName),
+      projectName: projectName,
+      message: "Project storage is available.",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      host: "aftereffects",
+      message: error && error.toString ? error.toString() : "The After Effects project location could not be read.",
+    };
+  }
+}
 
 function normalizedFilePath(file: File): string {
   var normalized: string = String(file.fsName || "").replace(/\\/g, "/");
@@ -216,6 +256,9 @@ export function insertAudioClip(request: InsertAudioRequest): HostResult {
   var layer: AVLayer;
   var importOptions: ImportOptions;
   var undoOpen: boolean = false;
+  var insertionTime: number;
+  var selectedLayers: Layer[];
+  var selectedIndex: number;
 
   try {
     if (!request || typeof request.path !== "string" || request.path.length === 0) {
@@ -232,6 +275,19 @@ export function insertAudioClip(request: InsertAudioRequest): HostResult {
       return { ok: false, host: "aftereffects", message: "Activate a composition before inserting audio." };
     }
     composition = app.project.activeItem as CompItem;
+    insertionTime = composition.time;
+    if (request.insertionTarget === "selected-clip") {
+      selectedLayers = composition.selectedLayers;
+      if (!selectedLayers || selectedLayers.length === 0) {
+        return { ok: false, host: "aftereffects", message: "Select a composition layer before inserting at the selected layer." };
+      }
+      insertionTime = Number(selectedLayers[0].inPoint);
+      for (selectedIndex = 1; selectedIndex < selectedLayers.length; selectedIndex += 1) {
+        if (Number(selectedLayers[selectedIndex].inPoint) < insertionTime) {
+          insertionTime = Number(selectedLayers[selectedIndex].inPoint);
+        }
+      }
+    }
 
     app.beginUndoGroup("SoundDesigner: Insert Audio");
     undoOpen = true;
@@ -246,12 +302,12 @@ export function insertAudioClip(request: InsertAudioRequest): HostResult {
     }
     moveAllFootageToSoundDesigner(sourceFile);
     layer = composition.layers.add(footage);
-    layer.startTime = composition.time;
+    layer.startTime = insertionTime;
     return {
       ok: true,
       host: "aftereffects",
       imported: imported,
-      message: (request.name || sourceFile.displayName) + " added at composition time.",
+      message: (request.name || sourceFile.displayName) + (request.insertionTarget === "selected-clip" ? " added at the selected layer start." : " added at composition time."),
     };
   } catch (error) {
     return {

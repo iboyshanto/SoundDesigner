@@ -33,7 +33,7 @@
 </script>
 
 <div class="library-tree-branch">
-  <div class:is-selected={selectedId === node.id} class="library-tree-row" style:padding-inline-start={`${4 + depth * 13}px`}>
+  <div class:has-edit-action={Boolean(onEdit)} class:is-selected={selectedId === node.id} class="library-tree-row" style:padding-inline-start={`${4 + depth * 13}px`}>
     <button
       aria-label={`${expanded ? "Collapse" : "Expand"} ${node.name}`}
       class:is-expanded={expanded}

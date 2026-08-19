@@ -4,7 +4,7 @@
   import Icon from "./Icon.svelte";
   import IconButton from "./IconButton.svelte";
 
-  let { sound, playing, progress, volume, loop, reversed, busy, onPrevious, onTogglePlay, onNext, onStop, onLoop, onReverse, onVolume, onInsert, onRemove }: {
+  let { sound, playing, progress, volume, loop, reversed, busy, segmentDuration, onPrevious, onTogglePlay, onNext, onStop, onLoop, onReverse, onVolume, onInsert, onRemove }: {
     sound: SoundFile | null;
     playing: boolean;
     progress: number;
@@ -12,6 +12,7 @@
     loop: boolean;
     reversed: boolean;
     busy: boolean;
+    segmentDuration: number;
     onPrevious: () => void;
     onTogglePlay: () => void;
     onNext: () => void;
@@ -44,11 +45,11 @@
       <Icon name="volume" />
       <input aria-label="Preview volume" max="1" min="0" oninput={(event) => onVolume(Number(event.currentTarget.value))} step="0.01" type="range" value={volume} />
     </div>
-    <span class="transport-time">{sound ? formatDuration(progress * (sound.duration || 0)) : "0:00"}</span>
+    <span class="transport-time">{sound ? formatDuration(progress * (sound.duration || 0)) : "0:00"}{#if segmentDuration > 0}<small> / {formatDuration(segmentDuration)} selected</small>{/if}</span>
     <IconButton icon="trash" label="Remove from index (keeps source file)" onclick={onRemove} disabled={!sound} class="danger-icon" />
-    <button class="primary-button tooltip" data-tooltip="Insert at the current playhead" disabled={!sound || busy} onclick={onInsert} type="button">
+    <button class="primary-button tooltip" data-tooltip={segmentDuration > 0 ? "Insert selected audio segment" : "Insert at the current playhead"} disabled={!sound || busy} onclick={onInsert} type="button">
       {#if busy}<span class="spinner"></span>{:else}<Icon name="download" />{/if}
-      <span>Insert</span>
+      <span>{segmentDuration > 0 ? "Insert segment" : "Insert"}</span>
     </button>
   </div>
 </footer>

@@ -6,6 +6,8 @@
     zoom = 1,
     reversed = false,
     showModeControls = true,
+    channelCountHint = 0,
+    loading = false,
   }: {
     channels: Float32Array[];
     fallback: Float32Array;
@@ -13,9 +15,10 @@
     zoom?: number;
     reversed?: boolean;
     showModeControls?: boolean;
+    channelCountHint?: number;
+    loading?: boolean;
   } = $props();
 
-  type WaveformMode = "stereo" | "mono";
   const FALLBACK_BINS = 1536;
   const MAX_RENDER_POINTS = 512;
 
@@ -36,23 +39,6 @@
       peaks[index * 2 + 1] = amplitude * (1.84 - asymmetry);
     }
     return peaks;
-  };
-
-  const mixChannelsToMono = (sourceChannels: Float32Array[]) => {
-    if (sourceChannels.length === 1) return sourceChannels[0];
-    const sampleLength = Math.max(0, ...sourceChannels.map((channel) => channel.length));
-    const mono = new Float32Array(sampleLength);
-    for (let index = 0; index < sampleLength; index += 2) {
-      let minimum = 0;
-      let maximum = 0;
-      for (const channel of sourceChannels) {
-        minimum += channel[index] || 0;
-        maximum += channel[index + 1] || 0;
-      }
-      mono[index] = minimum / sourceChannels.length;
-      if (index + 1 < sampleLength) mono[index + 1] = maximum / sourceChannels.length;
-    }
-    return mono;
   };
 
   const pathForChannel = (peaks: Float32Array, channelZoom: number, channelReversed: boolean) => {
@@ -92,56 +78,85 @@
     return `M${top.join(" L")} L${bottom.join(" L")} Z`;
   };
 
-  let renderedChannels = $derived(channels.length ? channels : [fallbackPeaks(fallback, 0)]);
+  let knownChannelCount = $derived(Math.max(0, Math.min(2, Math.floor(channelCountHint || 0))));
+  let awaitingChannelAnalysis = $derived(loading && channels.length === 0 && knownChannelCount === 0);
+  let fallbackChannelCount = $derived(knownChannelCount || 1);
+  let renderedChannels = $derived(channels.length
+    ? channels
+    : Array.from({ length: fallbackChannelCount }, (_, index) => fallbackPeaks(fallback, index)));
   let hasStereo = $derived(renderedChannels.length > 1);
-  let waveformMode = $state<WaveformMode>("stereo");
-  let visibleChannels = $derived(
-    waveformMode === "mono" || !hasStereo
-      ? [mixChannelsToMono(renderedChannels)]
-      : renderedChannels.slice(0, 2),
-  );
+  let channelMode = $state<"mono" | "stereo">("stereo");
+  let effectiveChannelMode = $derived(hasStereo && channelMode === "stereo" ? "stereo" : "mono");
+  let monoChannel = $derived.by(() => {
+    if (renderedChannels.length <= 1) return renderedChannels[0] || fallbackPeaks(fallback, 0);
+    const channelCount = Math.min(2, renderedChannels.length);
+    const valueCount = Math.min(...renderedChannels.slice(0, channelCount).map((channel) => channel.length));
+    const mixed = new Float32Array(valueCount);
+    for (let index = 0; index < valueCount; index += 1) {
+      let value = 0;
+      for (let channel = 0; channel < channelCount; channel += 1) value += renderedChannels[channel][index];
+      mixed[index] = value / channelCount;
+    }
+    return mixed;
+  });
+  let visibleChannels = $derived(effectiveChannelMode === "stereo"
+    ? renderedChannels.slice(0, 2)
+    : [monoChannel]);
   let visibleChannelPaths = $derived(visibleChannels.map((channel, index) => ({
     index,
     path: pathForChannel(channel, zoom, reversed),
   })));
   let playedPercent = $derived(Math.max(0, Math.min(100, progress * 100)));
-  let effectiveMode = $derived(waveformMode === "stereo" && hasStereo ? "Stereo" : "Mono");
+  let effectiveMode = $derived(effectiveChannelMode === "stereo" ? "Stereo" : "Mono");
 </script>
 
 <div
-  aria-label={`${effectiveMode} waveform preview`}
+  aria-busy={loading}
+  aria-label={loading ? "Analyzing audio channels" : `${effectiveMode} waveform preview`}
   class:has-mode-controls={showModeControls}
   class="channel-waveform"
 >
-  <div class="channel-lanes" style={`--channel-count: ${visibleChannelPaths.length}`}>
-    {#each visibleChannelPaths as channel (channel.index)}
-      <div class="channel-lane">
-        <span class="channel-centerline"></span>
-        <svg aria-hidden="true" preserveAspectRatio="none" viewBox="0 0 1024 100">
-          <path d={channel.path}></path>
-        </svg>
-      </div>
-    {/each}
-  </div>
-  {#if showModeControls}
-    <div aria-label="Waveform channel mode" class="channel-labels" role="group">
-      <button
-        aria-label="Show stereo waveform"
-        aria-pressed={waveformMode === "stereo" && hasStereo}
-        class:is-active={waveformMode === "stereo" && hasStereo}
-        disabled={!hasStereo}
-        onclick={(event) => { event.stopPropagation(); waveformMode = "stereo"; }}
-        type="button"
-      >Stereo</button>
-      <button
-        aria-label="Show mono waveform"
-        aria-pressed={waveformMode === "mono" || !hasStereo}
-        class:is-active={waveformMode === "mono" || !hasStereo}
-        onclick={(event) => { event.stopPropagation(); waveformMode = "mono"; }}
-        type="button"
-      >Mono</button>
+  {#if awaitingChannelAnalysis}
+    <div aria-hidden="true" class="channel-lanes channel-lanes--pending">
+      <span></span>
+    </div>
+  {:else}
+    <div class="channel-lanes" style={`--channel-count: ${visibleChannelPaths.length}`}>
+      {#each visibleChannelPaths as channel (channel.index)}
+        <div class="channel-lane">
+          <span class="channel-centerline"></span>
+          <svg aria-hidden="true" preserveAspectRatio="none" viewBox="0 0 1024 100">
+            <path d={channel.path}></path>
+          </svg>
+        </div>
+      {/each}
     </div>
   {/if}
-  <span aria-live="polite" class="sr-only">Showing {effectiveMode.toLowerCase()} waveform</span>
+  {#if showModeControls}
+    {#if loading}
+      <div aria-live="polite" class="channel-labels channel-labels--loading">
+        <span class="channel-analysis"><i aria-hidden="true"></i>Analyzing channels</span>
+      </div>
+    {:else}
+      <div aria-label="Waveform channel mode" class="channel-labels" role="group">
+        <button
+          aria-label="Show mono waveform"
+          aria-pressed={effectiveChannelMode === "mono"}
+          class:is-active={effectiveChannelMode === "mono"}
+          onclick={(event) => { event.stopPropagation(); channelMode = "mono"; }}
+          type="button"
+        >Mono</button>
+        <button
+          aria-label={hasStereo ? "Show stereo waveform" : "Stereo is unavailable for this sound"}
+          aria-pressed={effectiveChannelMode === "stereo"}
+          class:is-active={effectiveChannelMode === "stereo"}
+          disabled={!hasStereo}
+          onclick={(event) => { event.stopPropagation(); channelMode = "stereo"; }}
+          type="button"
+        >Stereo</button>
+      </div>
+    {/if}
+  {/if}
+  {#if !loading}<span aria-live="polite" class="sr-only">Showing {effectiveMode.toLowerCase()} waveform</span>{/if}
   <span class="channel-playhead" style:inset-inline-start={`${playedPercent}%`}>{#if progress > 0.02 && progress < 0.98}<i>{Math.round(progress * 100)}%</i>{/if}</span>
 </div>

@@ -12,6 +12,7 @@ type InsertAudioRequest = {
   path: string;
   name: string;
   targetAudioTrack: number;
+  insertionTarget?: "playhead" | "selected-clip";
 };
 
 type HostResult = {
@@ -22,7 +23,48 @@ type HostResult = {
   trackIndex?: number;
 };
 
+type ProjectContext = {
+  ok: boolean;
+  host: string;
+  projectPath?: string;
+  projectDirectory?: string;
+  projectName?: string;
+  message: string;
+};
+
 declare var qe: any;
+
+/** Returns the saved project location used for project-scoped SoundDesigner media. */
+export function getProjectContext(): ProjectContext {
+  var projectPath: string;
+  var projectFile: File;
+  var projectName: string;
+  try {
+    if (!app.project) {
+      return { ok: false, host: "premiere", message: "Open a Premiere Pro project before downloading audio." };
+    }
+    projectPath = String(app.project.path || "");
+    if (!projectPath) {
+      return { ok: false, host: "premiere", message: "Save the Premiere Pro project before downloading project audio." };
+    }
+    projectFile = new File(projectPath);
+    projectName = String(projectFile.displayName || projectFile.name || "Premiere Project").replace(/\.[^.]+$/, "");
+    return {
+      ok: true,
+      host: "premiere",
+      projectPath: String(projectFile.fsName),
+      projectDirectory: String(projectFile.parent.fsName),
+      projectName: projectName,
+      message: "Project storage is available.",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      host: "premiere",
+      message: error && error.toString ? error.toString() : "The Premiere Pro project location could not be read.",
+    };
+  }
+}
 
 function normalizePath(value: string): string {
   var normalized: string = String(value || "").replace(/\\/g, "/");
@@ -164,6 +206,29 @@ function findAvailableAudioTrack(sequence: Sequence, requestedIndex: number, sta
   return -1;
 }
 
+function findSelectedClipStartSeconds(sequence: Sequence): number {
+  var earliest: number = -1;
+  var trackIndex: number;
+  var clipIndex: number;
+  var clips: TrackItemCollection;
+  var clip: TrackItem;
+  var startSeconds: number;
+  var inspectTracks = function (tracks: TrackCollection): void {
+    for (trackIndex = 0; trackIndex < tracks.numTracks; trackIndex += 1) {
+      clips = tracks[trackIndex].clips;
+      for (clipIndex = 0; clipIndex < clips.numItems; clipIndex += 1) {
+        clip = clips[clipIndex];
+        if (!clip.isSelected()) continue;
+        startSeconds = Number(clip.start.seconds);
+        if (earliest < 0 || startSeconds < earliest) earliest = startSeconds;
+      }
+    }
+  };
+  inspectTracks(sequence.videoTracks);
+  inspectTracks(sequence.audioTracks);
+  return earliest;
+}
+
 function createAudioTrack(sequence: Sequence): number {
   var previousCount: number = sequence.audioTracks.numTracks;
   var qeSequence: any;
@@ -237,6 +302,7 @@ export function insertAudioClip(request: InsertAudioRequest): HostResult {
   var trackIndex: number;
   var playhead: Time;
   var playheadSeconds: number;
+  var insertionSeconds: number;
   var clipEndSeconds: number;
   var createdTrack: boolean = false;
   var insertResult: boolean | void;
@@ -276,8 +342,15 @@ export function insertAudioClip(request: InsertAudioRequest): HostResult {
 
     playhead = sequence.getPlayerPosition();
     playheadSeconds = Number(playhead.seconds);
-    clipEndSeconds = playheadSeconds + getAudioDurationSeconds(projectItem);
-    trackIndex = findAvailableAudioTrack(sequence, Number(request.targetAudioTrack), playheadSeconds, clipEndSeconds);
+    insertionSeconds = playheadSeconds;
+    if (request.insertionTarget === "selected-clip") {
+      insertionSeconds = findSelectedClipStartSeconds(sequence);
+      if (insertionSeconds < 0) {
+        return { ok: false, host: "premiere", message: "Select a timeline clip before inserting at the selected clip." };
+      }
+    }
+    clipEndSeconds = insertionSeconds + getAudioDurationSeconds(projectItem);
+    trackIndex = findAvailableAudioTrack(sequence, Number(request.targetAudioTrack), insertionSeconds, clipEndSeconds);
     if (trackIndex < 0) {
       trackIndex = createAudioTrack(sequence);
       if (trackIndex >= 0) {
@@ -292,7 +365,7 @@ export function insertAudioClip(request: InsertAudioRequest): HostResult {
     if (trackIndex < 0) {
       return { ok: false, host: "premiere", message: "Every available audio track overlaps this sound, and Premiere could not create a new audio track." };
     }
-    insertResult = sequence.audioTracks[trackIndex].overwriteClip(projectItem, playhead.seconds);
+    insertResult = sequence.audioTracks[trackIndex].overwriteClip(projectItem, insertionSeconds);
     if (insertResult === false) {
       return { ok: false, host: "premiere", message: "Premiere Pro rejected the timeline insertion." };
     }
@@ -301,7 +374,7 @@ export function insertAudioClip(request: InsertAudioRequest): HostResult {
       host: "premiere",
       imported: imported,
       trackIndex: trackIndex,
-      message: (request.name || sourceFile.displayName) + " inserted on A" + String(trackIndex + 1) + (createdTrack ? " (new track)." : "."),
+      message: (request.name || sourceFile.displayName) + " inserted on A" + String(trackIndex + 1) + (request.insertionTarget === "selected-clip" ? " at the selected clip" : " at the playhead") + (createdTrack ? " (new track)." : "."),
     };
   } catch (error) {
     return {

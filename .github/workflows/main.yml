@@ -14,13 +14,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 20
-          cache: npm
+          bun-version: 1.3.14
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: bun install --frozen-lockfile
 
       - name: Restore persistent publisher certificate
         shell: pwsh
@@ -35,7 +34,7 @@ jobs:
           GITHUB_REF_NAME: ${{ github.ref_name }}
           SOUNDDESIGNER_ZXP_CERT: ${{ runner.temp }}\sounddesigner-publisher.p12
           SOUNDDESIGNER_ZXP_PASSWORD: ${{ secrets.SOUNDDESIGNER_ZXP_PASSWORD }}
-        run: npm run release:package
+        run: bun run release:package
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2

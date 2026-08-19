@@ -82,10 +82,12 @@
   <div class="waveform-layer waveform-layer--base">
     <svg aria-hidden="true" preserveAspectRatio="none" viewBox="0 0 1000 100"><path d={path}></path></svg>
   </div>
-  <div class="waveform-played" style:clip-path={`inset(0 ${100 - playedPercent}% 0 0)`}>
-    <div class="waveform-layer waveform-layer--played">
-      <svg aria-hidden="true" preserveAspectRatio="none" viewBox="0 0 1000 100"><path d={path}></path></svg>
+  {#if playedPercent > 0}
+    <div class="waveform-played" style:clip-path={`inset(0 ${100 - playedPercent}% 0 0)`}>
+      <div class="waveform-layer waveform-layer--played">
+        <svg aria-hidden="true" preserveAspectRatio="none" viewBox="0 0 1000 100"><path d={path}></path></svg>
+      </div>
     </div>
-  </div>
+  {/if}
   {#if !compact}<span class="waveform-playhead" style:inset-inline-start={`${playedPercent}%`}></span>{/if}
 </div>

@@ -13,7 +13,7 @@
   }: {
     icon: IconName;
     label: string;
-    onclick?: () => void;
+    onclick?: (event: MouseEvent) => void;
     active?: boolean;
     pressed?: boolean;
     disabled?: boolean;

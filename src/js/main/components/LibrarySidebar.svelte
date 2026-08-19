@@ -9,7 +9,9 @@
 
   let {
     folders, sounds, selectedFolder, query, indexing, indexProgress, now,
+    localSourceEnabled, freesoundLibraryEnabled, freesoundSourceEnabled, freesoundConnected, freesoundCount,
     onSelectFolder, onQueryChange, onAddFolder, onEditFolder, onRescan, onClose,
+    onLocalSourceEnabled, onFreesoundSourceEnabled,
     update, updateDismissed, onOpenUpdate, onDismissUpdate,
   }: {
     folders: LibraryFolder[];
@@ -19,12 +21,19 @@
     indexing: boolean;
     indexProgress: ScanProgress;
     now: number;
+    localSourceEnabled: boolean;
+    freesoundLibraryEnabled: boolean;
+    freesoundSourceEnabled: boolean;
+    freesoundConnected: boolean;
+    freesoundCount: number;
     onSelectFolder: (folderId: string) => void;
     onQueryChange: (value: string) => void;
     onAddFolder: () => void;
     onEditFolder: (folderId: string) => void;
     onRescan: () => void;
     onClose: () => void;
+    onLocalSourceEnabled: (enabled: boolean) => void;
+    onFreesoundSourceEnabled: (enabled: boolean) => void;
     update: UpdateState;
     updateDismissed: boolean;
     onOpenUpdate: () => void;
@@ -35,6 +44,7 @@
   let normalizedQuery = $derived(query.trim().toLowerCase());
   let progressLocation = $derived(folderNameFromPath(indexProgress.currentPath));
   let visibleFolders = $derived(folders.filter((folder) => treeMatchesQuery(folder.tree, normalizedQuery)));
+  let activeSourceCount = $derived(Number(localSourceEnabled) + Number(freesoundLibraryEnabled && freesoundSourceEnabled));
 
   const toggleTreeNode = (nodeId: string) => {
     const next = new Set(expandedIds);
@@ -46,7 +56,7 @@
 
 <aside class="library-panel">
   <div class="panel-heading">
-    <div><span class="eyebrow">Library</span><strong>{sounds.length.toLocaleString()} sounds</strong></div>
+    <div><span class="eyebrow">Library</span><strong>{activeSourceCount} {activeSourceCount === 1 ? "source" : "sources"} active</strong></div>
     <div class="heading-actions">
       <IconButton icon="refresh" label="Rescan all folders" onclick={onRescan} disabled={indexing} />
       <IconButton icon="add" label="Add sound folder" onclick={onAddFolder} />
@@ -54,31 +64,52 @@
     </div>
   </div>
 
-  <label class="compact-search">
-    <Icon name="search" />
-    <input aria-label="Search library folders" oninput={(event) => onQueryChange(event.currentTarget.value)} placeholder="Filter library" value={query} />
-    {#if query}<IconButton icon="close" label="Clear library filter" onclick={() => onQueryChange("")} />{/if}
-  </label>
-
   <div class="library-list">
-    <button class:is-selected={selectedFolder === "all"} class="library-item library-item--all" onclick={() => onSelectFolder("all")} type="button">
-      <span class="library-icon"><Icon name="library" /></span>
-      <span class="library-copy"><strong>All sounds</strong><small>Every indexed folder</small></span>
-      <span class="count-badge">{sounds.length}</span>
-    </button>
-    {#each visibleFolders as folder (folder.id)}
-      <LibraryTreeRow
-        node={folder.tree}
-        depth={0}
-        selectedId={selectedFolder}
-        {expandedIds}
-        filterQuery={normalizedQuery}
-        meta={`Indexed ${relativeTime(folder.indexedAt, now)}`}
-        onSelect={onSelectFolder}
-        onToggle={toggleTreeNode}
-        onEdit={() => onEditFolder(folder.id)}
-      />
-    {/each}
+    <div aria-label="Search sources" class="library-sources" role="group">
+      <label class:is-active={localSourceEnabled} class="library-source-row">
+        <input checked={localSourceEnabled} onchange={(event) => onLocalSourceEnabled(event.currentTarget.checked)} type="checkbox" />
+        <span class="source-check"><Icon name="check" size={11} /></span>
+        <span class="source-icon"><Icon name="drive" size={14} /></span>
+        <span class="library-copy"><strong>Local</strong><small>{sounds.length.toLocaleString()} indexed sounds</small></span>
+      </label>
+      {#if localSourceEnabled}
+        <div class="local-library-branch">
+          {#if folders.length}
+            <label class="compact-search">
+              <Icon name="search" />
+              <input aria-label="Search library folders" autocomplete="off" name="library-folder-search" oninput={(event) => onQueryChange(event.currentTarget.value)} placeholder="Filter local folders…" spellcheck="false" value={query} />
+              {#if query}<IconButton icon="close" label="Clear library filter" onclick={() => onQueryChange("")} />{/if}
+            </label>
+          {/if}
+          <button class:is-selected={selectedFolder === "all"} class="library-item library-item--all" onclick={() => onSelectFolder("all")} type="button">
+            <span class="library-icon"><Icon name="library" /></span>
+            <span class="library-copy"><strong>All local sounds</strong><small>Every indexed folder</small></span>
+            <span class="count-badge">{sounds.length}</span>
+          </button>
+          {#each visibleFolders as folder (folder.id)}
+            <LibraryTreeRow
+              node={folder.tree}
+              depth={0}
+              selectedId={selectedFolder}
+              {expandedIds}
+              filterQuery={normalizedQuery}
+              meta={`Indexed ${relativeTime(folder.indexedAt, now)}`}
+              onSelect={onSelectFolder}
+              onToggle={toggleTreeNode}
+              onEdit={() => onEditFolder(folder.id)}
+            />
+          {/each}
+        </div>
+      {/if}
+      {#if freesoundLibraryEnabled}
+        <label class:is-active={freesoundSourceEnabled} class="library-source-row">
+          <input checked={freesoundSourceEnabled} onchange={(event) => onFreesoundSourceEnabled(event.currentTarget.checked)} type="checkbox" />
+          <span class="source-check"><Icon name="check" size={11} /></span>
+          <span class="source-icon source-icon--cloud"><Icon name="cloud" size={14} /></span>
+          <span class="library-copy"><strong>Freesound</strong><small>{freesoundConnected ? `${freesoundCount.toLocaleString()} cloud results` : "API key required"}</small></span>
+        </label>
+      {/if}
+    </div>
   </div>
 
   {#if update.status === "available" && !updateDismissed}

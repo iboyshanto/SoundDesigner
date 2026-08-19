@@ -8,6 +8,7 @@ The panel checks the public GitHub repository `iboyshanto/SoundDesigner` for the
 2. Create and securely back up one persistent `.p12` publisher certificate. Do not use `bun run zxp` for production releases: the current Vite CEP packaging configuration creates a new self-signed identity each time.
 3. Keep the certificate and password outside Git. Never commit either one.
 4. Test the signed package on macOS and Windows with the installer/distribution path you publish to users.
+5. If Freesound is enabled in a commercial release, obtain the required API-use permission from Freesound and verify that the release UX preserves creator, source URL, and license metadata.
 
 ## Publish a stable update
 
@@ -31,6 +32,7 @@ The panel checks the public GitHub repository `iboyshanto/SoundDesigner` for the
    ```
 
 3. Install and smoke-test `release/SoundDesigner-v1.2.3.zxp` in supported Premiere Pro and After Effects versions on both operating systems.
+   Include a saved-project Freesound download, unsupported local audio conversion, optional −1 dBFS normalization, Project-panel `SoundDesigner` organization, and a project-switch cache check.
 4. Commit the source/version change and push it. Create the tag `v1.2.3` from that exact commit.
 5. Create a non-draft, non-prerelease GitHub Release from the tag and upload:
    - `SoundDesigner-v1.2.3.zxp`
