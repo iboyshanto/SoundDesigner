@@ -185,6 +185,16 @@ bun run watch
 
 Production releases must use a persistent publisher certificate. The extension never silently executes downloaded code—it simply checks for updates and directs users to the repository.
 
+```sh
+# One-time, secure publisher setup
+bun run certificate:create
+
+# Build the signed ZXP and checksum
+bun run release:package
+```
+
+The certificate is stored under the Git-ignored `.signing` directory, and its password is requested through a hidden terminal prompt rather than saved to disk.
+
 Please refer to [`RELEASING.md`](RELEASING.md) for the complete signing, testing, tagging, and publishing procedure.
 
 ---

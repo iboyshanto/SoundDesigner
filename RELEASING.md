@@ -5,31 +5,21 @@ The panel checks the public GitHub repository `iboyshanto/SoundDesigner` for the
 ## One-time setup
 
 1. Create the public repository `https://github.com/iboyshanto/SoundDesigner` or change `UPDATE_REPOSITORY` in `src/js/main/updater.ts` before the first public build.
-2. Create and securely back up one persistent `.p12` publisher certificate. Do not use `bun run zxp` for production releases: the current Vite CEP packaging configuration creates a new self-signed identity each time.
-3. Keep the certificate and password outside Git. Never commit either one.
+2. Run `bun run certificate:create` once and enter a strong password when prompted. This creates `.signing/SoundDesigner-publisher.p12` without printing or storing the password.
+3. Securely back up the certificate and password. The `.signing` directory is ignored by Git; never commit or publish the certificate.
 4. Test the signed package on macOS and Windows with the installer/distribution path you publish to users.
 5. If Freesound is enabled in a commercial release, obtain the required API-use permission from Freesound and verify that the release UX preserves creator, source URL, and license metadata.
 
 ## Publish a stable update
 
 1. Update `version` in `package.json` using semantic versioning, for example `1.2.3`.
-2. Build and sign with the same publisher identity:
-
-   macOS/Linux:
+2. Build and sign with the same publisher identity. The command automatically finds the local certificate and securely prompts for its password:
 
    ```sh
-   SOUNDDESIGNER_ZXP_CERT=/absolute/path/publisher.p12 \
-   SOUNDDESIGNER_ZXP_PASSWORD='your-password' \
    bun run release:package
    ```
 
-   Windows PowerShell:
-
-   ```powershell
-   $env:SOUNDDESIGNER_ZXP_CERT = 'C:\secure\publisher.p12'
-   $env:SOUNDDESIGNER_ZXP_PASSWORD = 'your-password'
-   bun run release:package
-   ```
+   CI may instead provide `SOUNDDESIGNER_ZXP_CERT` and `SOUNDDESIGNER_ZXP_PASSWORD` through secrets. The GitHub workflow expects `SOUNDDESIGNER_ZXP_CERT_BASE64` and `SOUNDDESIGNER_ZXP_PASSWORD`.
 
 3. Install and smoke-test `release/SoundDesigner-v1.2.3.zxp` in supported Premiere Pro and After Effects versions on both operating systems.
    Include a saved-project Freesound download, unsupported local audio conversion, optional −1 dBFS normalization, Project-panel `SoundDesigner` organization, and a project-switch cache check.

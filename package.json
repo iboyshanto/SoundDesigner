@@ -14,6 +14,7 @@
     "watch": "svelte-check --workspace ./src/js --tsconfig ../../tsconfig.svelte.json && tsc && cross-env BOLT_WATCH=true vite build --watch",
     "check": "svelte-check --workspace ./src/js --tsconfig ../../tsconfig.svelte.json",
     "build": "rimraf dist && svelte-check --workspace ./src/js --tsconfig ../../tsconfig.svelte.json && tsc -p \"tsconfig-build.json\" && vite build",
+    "certificate:create": "node scripts/create-publisher-certificate.mjs",
     "release:package": "cross-env SOUNDDESIGNER_RELEASE_BUILD=true bun run build && node scripts/package-release.mjs",
     "zxp": "rimraf dist && svelte-check --workspace ./src/js --tsconfig ../../tsconfig.svelte.json && tsc -p \"tsconfig-build.json\" && cross-env ZXP_PACKAGE=true vite build",
     "zip": "rimraf dist && svelte-check --workspace ./src/js --tsconfig ../../tsconfig.svelte.json && tsc -p \"tsconfig-build.json\" && cross-env ZIP_PACKAGE=true vite build",
